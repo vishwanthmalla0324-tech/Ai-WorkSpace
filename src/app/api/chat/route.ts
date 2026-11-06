@@ -1,23 +1,20 @@
-export async function POST(req: Request) {
+﻿export async function POST(req: Request) {
   try {
     const { messages, systemInstruction } = await req.json();
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
     if (!apiKey) {
-      return new Response("Missing GOOGLE_GENERATIVE_AI_API_KEY in .env.local", { status: 500 });
+      console.error("Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable on server");
+      return new Response("API key not configured", { status: 500 });
     }
 
     const contents = messages.map((m: any) => {
       const parts: any[] = [];
       if (m.image) {
-        // Base64 format: data:image/png;base64,xxxx
         const mimeType = m.image.split(";")[0].replace("data:", "");
         const base64Data = m.image.split(",")[1];
         parts.push({
-          inlineData: {
-            mimeType,
-            data: base64Data,
-          },
+          inlineData: { mimeType, data: base64Data },
         });
       }
       if (m.content) {
@@ -37,11 +34,12 @@ export async function POST(req: Request) {
       };
     }
 
+    // Supported production and fallback model endpoints
     const modelsToTry = [
-      "gemini-3.5-flash",
-      "gemini-3-flash-preview",
-      "gemini-flash-latest",
-      "gemma-4-31b-it"
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-flash-latest"
     ];
 
     let geminiStream: Response | null = null;
@@ -65,7 +63,8 @@ export async function POST(req: Request) {
     }
 
     if (!geminiStream || !geminiStream.body) {
-      return new Response(`All streaming models failed: ${lastError}`, { status: 503 });
+      console.error("All Gemini models rejected request:", lastError);
+      return new Response(`All models failed: ${lastError}`, { status: 503 });
     }
 
     const encoder = new TextEncoder();
@@ -115,7 +114,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err: any) {
-    const errorMsg = err?.message || String(err);
-    return new Response(`Server error: ${errorMsg}`, { status: 500 });
+    console.error("Server error handling chat:", err);
+    return new Response(`Server error: ${err?.message || String(err)}`, { status: 500 });
   }
 }
